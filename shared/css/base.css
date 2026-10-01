@@ -1,0 +1,383 @@
+/*
+ * shared/css/base.css
+ * 尾崎矯正歯科クリニック シミュレーションアプリ共通スタイル
+ *
+ * 顔貌シミュレーション（facial-simulator）と口腔内シミュレーション（oral-simulator）で
+ * 共通のデザイントークン・UI部品を定義する。各アプリ固有のスタイルは
+ * それぞれの css/style.css に置き、このファイルを @import せずに
+ * <link> で先に読み込む（順序: base.css → style.css）。
+ *
+ * 対応端末: スマートフォン / iPad / PC（レスポンシブ・タッチ操作対応）
+ */
+
+:root {
+  --c-primary: #0e7490;
+  --c-primary-dark: #155e75;
+  --c-bg: #f4f7f8;
+  --c-card: #ffffff;
+  --c-text: #1f2937;
+  --c-muted: #6b7280;
+  --c-border: #d8e0e4;
+  --c-accent: #f59e0b;
+  --c-danger: #b91c1c;
+  --c-ok: #047857;
+  --radius: 14px;
+  --shadow: 0 2px 10px rgba(15, 46, 60, 0.08);
+  --maxw: 980px;
+}
+
+* { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  font-family: "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic UI", "Meiryo", system-ui, sans-serif;
+  background: var(--c-bg);
+  color: var(--c-text);
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior-y: contain;
+}
+
+/* --------------------------------------------------------------------- */
+/* ヘッダ・フッタ                                                         */
+/* --------------------------------------------------------------------- */
+.app-header {
+  background: linear-gradient(135deg, var(--c-primary-dark), var(--c-primary));
+  color: #fff;
+  padding: 14px 16px;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  box-shadow: var(--shadow);
+}
+.header-inner {
+  max-width: var(--maxw);
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.app-header h1 { font-size: 1.15rem; margin: 0; letter-spacing: 0.02em; }
+.clinic-name { margin: 2px 0 0; font-size: 0.78rem; opacity: 0.85; }
+.header-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+
+main {
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding: 16px 12px 40px;
+}
+
+.app-footer {
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding: 0 16px 30px;
+  font-size: 0.72rem;
+  color: var(--c-muted);
+  line-height: 1.7;
+}
+
+/* --------------------------------------------------------------------- */
+/* カード（ステップ）                                                     */
+/* --------------------------------------------------------------------- */
+.card {
+  background: var(--c-card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 18px 16px;
+  margin-bottom: 18px;
+  transition: opacity 0.25s;
+}
+.card.is-disabled { opacity: 0.45; pointer-events: none; }
+
+.card h2 {
+  font-size: 1.02rem;
+  margin: 0 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.card h3 { font-size: 0.9rem; margin: 18px 0 6px; }
+
+.step-no {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--c-primary);
+  color: #fff;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+
+.hint { font-size: 0.8rem; color: var(--c-muted); line-height: 1.6; }
+
+/* --------------------------------------------------------------------- */
+/* ボタン                                                                 */
+/* --------------------------------------------------------------------- */
+.btn {
+  appearance: none;
+  border: 1px solid var(--c-border);
+  background: #fff;
+  color: var(--c-text);
+  border-radius: 10px;
+  padding: 10px 16px;
+  font-size: 0.92rem;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+  transition: filter 0.15s, background 0.15s;
+  touch-action: manipulation;
+}
+.btn:active { filter: brightness(0.93); }
+.btn:disabled { opacity: 0.45; cursor: default; }
+.btn-primary { background: var(--c-primary); border-color: var(--c-primary); color: #fff; }
+.btn-ghost { background: transparent; border-color: transparent; color: inherit; }
+.app-header .btn-ghost { border-color: rgba(255, 255, 255, 0.5); color: #fff; font-size: 0.8rem; }
+.btn-sm { padding: 6px 12px; font-size: 0.8rem; }
+.btn.is-active { background: var(--c-primary); border-color: var(--c-primary); color: #fff; }
+.btn-row { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0; align-items: center; }
+
+/* --------------------------------------------------------------------- */
+/* ステータス表示                                                         */
+/* --------------------------------------------------------------------- */
+.status { font-size: 0.85rem; padding: 8px 12px; border-radius: 8px; line-height: 1.6; }
+.status.ok { background: #ecfdf5; color: var(--c-ok); }
+.status.err { background: #fef2f2; color: var(--c-danger); }
+.status.busy { background: #eff6ff; color: #1d4ed8; }
+.status.warn { background: #fffbeb; color: #b45309; }
+
+/* --------------------------------------------------------------------- */
+/* スライダー（パラメータ行）                                             */
+/* --------------------------------------------------------------------- */
+.param-panel { margin: 8px 0; }
+.param-row { margin: 14px 0; }
+.param-row label {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 0.85rem;
+  margin-bottom: 4px;
+}
+.param-row .param-val { font-weight: 600; color: var(--c-primary-dark); white-space: nowrap; }
+.param-row input[type="range"] { width: 100%; }
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 26px;
+  background: transparent;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 5px;
+  border-radius: 3px;
+  background: var(--c-border);
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 24px;
+  height: 24px;
+  margin-top: -10px;
+  border-radius: 50%;
+  background: var(--c-primary);
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+input[type="range"]::-moz-range-track { height: 5px; border-radius: 3px; background: var(--c-border); }
+input[type="range"]::-moz-range-thumb {
+  width: 22px; height: 22px; border-radius: 50%;
+  background: var(--c-primary); border: 2px solid #fff;
+}
+
+select, input[type="number"], input[type="text"] {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 7px 8px;
+  border: 1px solid var(--c-border);
+  border-radius: 8px;
+  background: #fff;
+  color: inherit;
+  max-width: 100%;
+}
+
+/* --------------------------------------------------------------------- */
+/* 治療メニューのカード（顔貌・口腔内の両アプリで使用）                   */
+/* --------------------------------------------------------------------- */
+.treatment-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 10px;
+  margin: 12px 0;
+}
+.treatment-card {
+  border: 2px solid var(--c-border);
+  border-radius: 12px;
+  padding: 12px;
+  cursor: pointer;
+  background: #fff;
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s;
+  font: inherit;
+  color: inherit;
+}
+.treatment-card.is-selected { border-color: var(--c-primary); background: #ecfeff; }
+.treatment-card .t-name { font-weight: 600; font-size: 0.92rem; display: block; }
+.treatment-card .t-desc {
+  font-size: 0.75rem;
+  color: var(--c-muted);
+  margin-top: 4px;
+  display: block;
+  line-height: 1.5;
+}
+
+/* --------------------------------------------------------------------- */
+/* 写真プレビューと結果のキャンバス                                       */
+/* --------------------------------------------------------------------- */
+.photo-canvas {
+  max-width: 100%;
+  height: auto;
+  border-radius: 10px;
+  border: 1px solid var(--c-border);
+}
+
+/* --------------------------------------------------------------------- */
+/* タブ                                                                   */
+/* --------------------------------------------------------------------- */
+.tabs {
+  display: flex;
+  gap: 6px;
+  border-bottom: 2px solid var(--c-border);
+  margin-bottom: 12px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.tab {
+  appearance: none;
+  border: none;
+  background: transparent;
+  padding: 10px 14px;
+  font-size: 0.88rem;
+  cursor: pointer;
+  color: var(--c-muted);
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  white-space: nowrap;
+}
+.tab.is-active { color: var(--c-primary-dark); border-bottom-color: var(--c-primary); font-weight: 600; }
+
+/* --------------------------------------------------------------------- */
+/* 3Dビューア                                                             */
+/* --------------------------------------------------------------------- */
+.viewer3d {
+  width: 100%;
+  height: min(70vh, 520px);
+  border-radius: 10px;
+  background: radial-gradient(circle at 50% 30%, #2c3e50, #1a2530);
+  overflow: hidden;
+  touch-action: none;
+  position: relative;
+}
+.viewer3d canvas { display: block; }
+.view-presets { justify-content: center; }
+
+/* --------------------------------------------------------------------- */
+/* Before / After モーフ操作                                              */
+/* --------------------------------------------------------------------- */
+.morph-control { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--c-border); }
+.morph-control label { display: flex; justify-content: space-between; font-size: 0.85rem; margin: 8px 0 4px; }
+.morph-control input[type="range"] { width: 100%; }
+.ab-buttons { display: flex; gap: 8px; }
+
+/* --------------------------------------------------------------------- */
+/* ダイアログ                                                             */
+/* --------------------------------------------------------------------- */
+dialog {
+  border: none;
+  border-radius: var(--radius);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
+  max-width: 620px;
+  width: calc(100vw - 32px);
+  max-height: 85vh;
+  padding: 20px 18px;
+  color: var(--c-text);
+}
+dialog::backdrop { background: rgba(15, 30, 40, 0.5); }
+dialog h2 { margin-top: 0; font-size: 1rem; }
+dialog h3 { font-size: 0.9rem; margin: 18px 0 6px; }
+dialog code { background: #f1f5f9; padding: 1px 5px; border-radius: 4px; font-size: 0.78rem; }
+.dialog-actions { justify-content: flex-end; margin-top: 16px; }
+
+/* --------------------------------------------------------------------- */
+/* 表                                                                     */
+/* --------------------------------------------------------------------- */
+.data-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+.data-table th, .data-table td { border: 1px solid var(--c-border); padding: 5px 7px; text-align: left; }
+.data-table th { background: #f8fafc; font-weight: 600; }
+.data-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* --------------------------------------------------------------------- */
+/* 症例一覧（顔貌・口腔内の両アプリで使用）                               */
+/* --------------------------------------------------------------------- */
+.case-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--c-border);
+  font-size: 0.82rem;
+}
+.case-row .case-name { flex: 1 1 auto; font-weight: 600; }
+.case-row .case-meta { color: var(--c-muted); font-size: 0.74rem; }
+
+.field { display: flex; flex-direction: column; gap: 4px; font-size: 0.78rem; color: var(--c-muted); }
+.field > span { white-space: nowrap; }
+
+/* --------------------------------------------------------------------- */
+/* ローディング                                                           */
+/* --------------------------------------------------------------------- */
+#loading-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.92);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  z-index: 100;
+  font-size: 0.9rem;
+  color: var(--c-muted);
+  text-align: center;
+  padding: 24px;
+}
+#loading-overlay.is-hidden { display: none; }
+.spinner {
+  width: 42px;
+  height: 42px;
+  border: 4px solid var(--c-border);
+  border-top-color: var(--c-primary);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* --------------------------------------------------------------------- */
+/* 画面幅への対応                                                          */
+/* --------------------------------------------------------------------- */
+@media (max-width: 640px) {
+  .treatment-cards { grid-template-columns: 1fr; }
+}
+
+/* --------------------------------------------------------------------- */
+/* カメラ                                                                 */
+/* --------------------------------------------------------------------- */
+.camera-video {
+  width: 100%;
+  max-height: 60vh;
+  border-radius: 10px;
+  background: #000;
+  object-fit: contain;
+}

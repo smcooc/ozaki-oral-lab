@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>OZAKI Oral Lab | 咬合シミュレーター</title>
+<meta name="description" content="口腔内写真から歯列の3Dモデルを作り、抜歯・非抜歯・外科手術など治療方針ごとの排列をシミュレーションします。">
+<meta name="theme-color" content="#155e75">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="OZAKI Oral Lab">
+<meta name="robots" content="noindex,nofollow">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="../shared/css/base.css">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="app-header">
+  <div class="header-inner">
+    <div>
+      <h1>OZAKI Oral Lab</h1>
+      <p class="clinic-name">咬合シミュレーター</p>
+    </div>
+    <div class="header-actions">
+      <button id="btn-cases" class="btn btn-ghost" title="症例の保存・読み込み">📁 症例</button>
+      <button id="btn-settings" class="btn btn-ghost" title="標準歯冠幅径などの設定">⚙ 設定</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <details class="install-panel" id="install-help">
+    <summary>ホーム画面に追加して、アプリとして使う</summary>
+    <p>iPhone・iPad：Safariで開き、共有メニュー →「ホーム画面に追加」→「追加」。「Webアプリとして開く」がある場合はオンにします。</p>
+    <p>PC・Android：対応ブラウザのインストールボタンから追加できます。通常のブラウザでも利用できます。</p>
+    <button type="button" id="install-app" class="btn btn-primary" hidden>アプリをインストール</button>
+    <p class="hint">写真はこの端末内で処理します。症例の保存先は端末・ブラウザごとに別で、自動同期はされません。</p>
+  </details>
+  <div id="app-update" class="install-panel" role="status" hidden>
+    新しい版があります。症例を保存してから更新してください。写真は選び直しが必要です。
+    <button type="button" id="update-app" class="btn">保存後に更新する</button>
+  </div>
+  <!-- STEP 0: 撮影方法の選択 -->
+  <section class="card" id="step-mode">
+    <h2><span class="step-no">0</span>撮影方法を選ぶ</h2>
+    <div class="treatment-cards" id="mode-cards">
+      <button type="button" class="treatment-card" data-capture="clinical">
+        <span class="t-name">口腔内カメラ・一眼（5枚法）</span>
+        <span class="t-desc">
+          矯正歯科の規格写真（正面観・左右側方観・上下顎咬合面観）。
+          ミラーで撮った咬合面観から<strong>歯列弓の形・歯の幅径・
+          1歯ずつの咬合面輪郭を実測</strong>します。プレゼン用に撮った写真、
+          その印刷物や画面を撮り直したもの、元データのいずれでも使えます。
+        </span>
+      </button>
+      <button type="button" class="treatment-card" data-capture="clinical7">
+        <span class="t-name">口腔内カメラ・一眼（7枚法）</span>
+        <span class="t-desc">
+          5枚法に、<strong>咬合位の真横（90°）から撮った左右2枚</strong>を加えた構成です。
+          真横の写真は臼歯関係がいちばんよく写るため、
+          上下顎の前後的な関係（オーバージェット・臼歯関係）の精度が上がります。
+        </span>
+      </button>
+      <button type="button" class="treatment-card is-selected" data-capture="phone">
+        <span class="t-name">スマートフォンで撮影（口角鉤なし）</span>
+        <span class="t-desc">
+          ご自身の口元を正面・左右斜めから撮った数枚で3Dを組み立てます。
+          ミラーが使えず咬合面観が撮れないため、<strong>臼歯部は標準形態で補います</strong>。
+          前歯部の見え方・歯冠長・咬み合わせの深さは写真から合わせます。
+        </span>
+      </button>
+    </div>
+    <p id="mode-note" class="status warn"></p>
+  </section>
+
+  <!-- STEP 1: 写真取り込み -->
+  <section class="card" id="step-photo">
+    <h2><span class="step-no">1</span>写真を取り込む</h2>
+    <p class="hint" id="photo-hint"></p>
+    <div class="photo-slots" id="photo-slots"></div>
+
+    <div id="camera-area" hidden>
+      <video id="camera-video" class="camera-video" autoplay playsinline muted></video>
+      <div class="btn-row">
+        <button id="btn-shutter" class="btn btn-primary">シャッター</button>
+        <button id="btn-switch-cam" class="btn">前後カメラ切替</button>
+        <button id="btn-cancel-cam" class="btn btn-ghost">キャンセル</button>
+      </div>
+      <p class="hint">撮影対象: <span id="camera-target"></span></p>
+    </div>
+    <p id="photo-status" class="status" hidden></p>
+  </section>
+
+  <!-- STEP 2: 歯列の検出 -->
+  <section class="card is-disabled" id="step-detect">
+    <h2><span class="step-no">2</span>歯列の検出を確認・修正する</h2>
+    <p class="hint" id="detect-mode-note" hidden></p>
+    <div class="arch-switch btn-row">
+      <button class="btn btn-sm is-active" data-arch="upper">上顎</button>
+      <button class="btn btn-sm" data-arch="lower">下顎</button>
+      <span class="spacer"></span>
+      <label class="check-row"><input type="checkbox" id="chk-mask"> 検出領域を表示</label>
+    </div>
+    <div class="editor-wrap">
+      <canvas id="editor-canvas"></canvas>
+    </div>
+    <div class="boundary-controls">
+      <label class="field"><span>微調整する境界</span><select id="boundary-select" disabled><option value="">写真を取り込んでください</option></select></label>
+      <label class="field"><span>境界の拡大表示</span><select id="boundary-zoom"><option value="2">2倍</option><option value="4" selected>4倍</option><option value="6">6倍</option></select></label>
+      <canvas id="boundary-detail" width="900" height="360" aria-label="選択した歯の境界の拡大表示" hidden></canvas>
+      <div class="btn-row">
+        <button id="boundary-in" class="btn" disabled>前歯側へ</button>
+        <button id="boundary-out" class="btn" disabled>奥歯側へ</button>
+        <button id="boundary-undo" class="btn btn-ghost" disabled>境界を1つ戻す</button>
+      </div>
+      <p id="boundary-status" class="hint" role="status">歯番号で境界を選ぶと、水色で表示されます。ボタン1回で写真上の1画素ずつ動かせます。</p>
+      <p class="hint">「症例」で保存すると基準点と境界も記録します。写真は保存しません。同じ症例を開いて同じ写真を選ぶと復元します（HTTPSまたはlocalhostで利用できます）。拡大画像は確認用で、下のボタンで調整できます。</p>
+      <p class="hint">5番と6番の境界がずれる場合は、最初に「最後方の歯」と「欠損・未萌出」を写真と照合してください。自動再検出すると手直しと取り消し履歴はリセットされます。</p>
+    </div>
+    <p class="hint">
+      <strong>黄色の点＝正中</strong>、<strong>青の点＝左右の最後方歯</strong>の基準点です。
+      <strong>白い線＝歯の境界（隣接面）</strong>で、いずれもドラッグで動かせます。<br>
+      白い線は<strong>線のどこをつかんでも動きます</strong>（線の上に半透明の帯が出ている範囲）。
+      触れると水色に変わるので、そこでドラッグしてください。
+      基準点を動かすと検出全体をやり直し、境界を動かすと幅径・叢生量を計算し直します。<br>
+      <strong>自動検出がずれているときは、まず黄色と青の3点を合わせてください。</strong>
+      この3点が歯列弓の座標系を決めているため、ここが合うと残りも大きく改善します。
+    </p>
+    <div class="detect-controls">
+      <label class="field">
+        <span>最後方の歯</span>
+        <select id="sel-last-tooth">
+          <option value="7">第二大臼歯（7番）まで</option>
+          <option value="6">第一大臼歯（6番）まで</option>
+          <option value="5">第二小臼歯（5番）まで</option>
+          <option value="8">第三大臼歯（8番）まで</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>基準幅径: 上顎中切歯</span>
+        <input type="number" id="in-central-md" step="0.1" min="6" max="12" value="8.5"><span class="unit">mm</span>
+      </label>
+      <label class="field">
+        <span>上顎中切歯の歯冠長</span>
+        <input type="number" id="in-central-height" step="0.1" min="6" max="15" value="10.5"><span class="unit">mm</span>
+      </label>
+      <span class="hint">※歯冠長は STEP3 で正面観から自動計測できます</span>
+      <button id="btn-redetect" class="btn btn-sm">自動検出をやり直す</button>
+    </div>
+
+    <h3>欠損・未萌出の歯</h3>
+    <p class="hint">
+      すでに抜去された歯、先天欠如、まだ生えていない歯をタップして
+      <strong>「なし」</strong>にしてください。指定すると、その歯を数に入れずに
+      歯列を分割し直します。<strong>左右で違っていても構いません。</strong><br>
+      指定しないままだと、存在しない歯の分まで境界を割り当ててしまい、
+      幅径も叢生量もずれます。
+    </p>
+    <div id="absent-chart" class="dentition-chart"></div>
+    <p id="detect-status" class="status" hidden></p>
+  </section>
+
+  <!-- STEP 3: 多視点フィッティング -->
+  <section class="card is-disabled" id="step-fit">
+    <h2><span class="step-no">3</span>写真に3Dモデルを合わせる</h2>
+    <p class="hint">
+      正面観・側方観を取り込むと、3Dモデルをその写真の見え方に重ね、
+      一致するように<strong>歯冠長・オーバーバイト・スピー彎曲・開口量</strong>と
+      <strong>上下顎の前後的な関係（オーバージェット・臼歯関係）</strong>を自動で調整します。
+      咬合面観だけでは標準値で補うしかない高さ方向の情報が、患者さん自身の写真から決まります。
+      7枚法の<strong>真横（90°）</strong>の写真があると、臼歯関係がよく写るため
+      上下顎の前後的な関係の精度が上がります。
+    </p>
+    <div class="btn-row">
+      <button id="btn-fit" class="btn btn-primary">写真に合わせる</button>
+      <span id="fit-quality" class="hint"></span>
+    </div>
+    <div id="fit-views" class="fit-views"></div>
+    <div id="fit-result"></div>
+    <p id="fit-status" class="status" hidden></p>
+  </section>
+
+  <!-- STEP 4: 治療方針 -->
+  <section class="card is-disabled" id="step-plan">
+    <h2><span class="step-no">4</span>治療方針を設定する</h2>
+    <div id="plan-cards" class="treatment-cards"></div>
+
+    <div id="absent-block-phone" hidden>
+      <h3>欠損・未萌出の歯</h3>
+      <p class="hint">
+        すでに抜去された歯、先天欠如、まだ生えていない歯をタップして
+        <strong>「なし」</strong>にしてください（上段が上顎、下段が下顎）。
+        指定した歯は歯列から外して組み立て直します。
+      </p>
+      <div id="absent-chart-phone" class="dentition-chart"></div>
+    </div>
+
+    <h3>抜歯部位</h3>
+    <p class="hint">歯式の各歯をタップすると抜歯する歯を個別に指定できます（上顎のみ・下顎のみ・非対称抜歯にも対応）。</p>
+    <div id="dentition-chart" class="dentition-chart"></div>
+
+    <h3>スペースの獲得と固定源</h3>
+    <div id="space-params" class="param-panel"></div>
+
+    <h3>アーチフォーム</h3>
+    <label class="field">
+      <span>排列の基準とする歯列弓形態</span>
+      <select id="sel-arch-form"></select>
+    </label>
+
+    <label class="check-row toggle-line">
+      <input type="checkbox" id="chk-surgery"> 外科手術（顎矯正手術）を併用する
+    </label>
+    <div id="surgery-params" class="param-panel" hidden></div>
+
+    <h3>咬合の基準値</h3>
+    <p class="hint">咬合面観からは計測できないため、口腔内での実測値を入力してください（初期値は標準的な値です）。</p>
+    <div id="occlusion-params" class="param-panel"></div>
+  </section>
+
+  <!-- STEP 4: 結果 -->
+  <section class="card is-disabled" id="step-result">
+    <h2><span class="step-no">5</span>シミュレーション結果</h2>
+
+    <div class="tabs" id="result-tabs">
+      <button class="tab is-active" data-tab="tab-3d">3Dビュー</button>
+      <button class="tab" data-tab="tab-numbers">診断値</button>
+      <button class="tab" data-tab="tab-compare">比較・保存</button>
+      <button class="tab" data-tab="tab-overlay">正面写真に重ねる</button>
+      <button class="tab" data-tab="tab-export">データ書き出し</button>
+    </div>
+
+    <div id="tab-3d" class="tab-body">
+      <div id="viewer3d" class="viewer3d"><span id="ta-badge" class="ta-badge" hidden></span></div>
+      <!-- 歯ごとの手直し（写真の計測がずれた歯の治療前の位置を直す）。操作は js/tooth-adjust.js -->
+      <details id="tooth-adjust" class="tooth-adjust">
+        <summary>歯の位置を手直し（治療前）<span id="ta-summary" class="ta-summary"></span></summary>
+        <select id="ta-select" class="ta-select" aria-label="手直しする歯"></select>
+        <p id="ta-hint" class="hint ta-hint" aria-live="polite"></p>
+        <div id="ta-panel" class="ta-panel" hidden>
+          <div class="ta-head">
+            <strong id="ta-label" class="ta-label"></strong>
+            <span id="ta-name" class="ta-name"></span>
+            <button type="button" id="ta-close" class="btn btn-sm btn-ghost ta-close">選択を解除</button>
+          </div>
+          <div class="ta-grid">
+            <button type="button" class="btn ta-btn" data-adj="labial" data-dir="-1"><span class="ta-main">舌側へ</span><span class="ta-sub">0.5mm</span></button>
+            <output id="ta-val-labial" class="ta-val">±0</output>
+            <button type="button" class="btn ta-btn" data-adj="labial" data-dir="1"><span class="ta-main">唇側へ</span><span class="ta-sub">0.5mm</span></button>
+            <button type="button" class="btn ta-btn" data-adj="distal" data-dir="-1"><span class="ta-main">近心へ</span><span class="ta-sub">0.5mm</span></button>
+            <output id="ta-val-distal" class="ta-val">±0</output>
+            <button type="button" class="btn ta-btn" data-adj="distal" data-dir="1"><span class="ta-main">遠心へ</span><span class="ta-sub">0.5mm</span></button>
+            <button type="button" class="btn ta-btn" data-adj="rotate" data-dir="-1"><span class="ta-main">捻転 −5°</span><span class="ta-sub">近心を唇側へ</span></button>
+            <output id="ta-val-rotate" class="ta-val">±0</output>
+            <button type="button" class="btn ta-btn" data-adj="rotate" data-dir="1"><span class="ta-main">捻転 +5°</span><span class="ta-sub">遠心を唇側へ</span></button>
+            <button type="button" class="btn ta-btn" data-adj="extrude" data-dir="-1"><span class="ta-main">圧下</span><span class="ta-sub">0.5mm</span></button>
+            <output id="ta-val-extrude" class="ta-val">±0</output>
+            <button type="button" class="btn ta-btn" data-adj="extrude" data-dir="1"><span class="ta-main">挺出</span><span class="ta-sub">0.5mm</span></button>
+          </div>
+        </div>
+        <div class="btn-row ta-actions">
+          <button type="button" id="ta-reset-tooth" class="btn" hidden>この歯を元に戻す</button>
+          <button type="button" id="ta-reset-all" class="btn ta-reset-all">すべて元に戻す</button>
+        </div>
+        <p class="hint ta-note">操作すると「現在」（治療前）の表示に切り替わります。手直しは症例に保存され、同じ写真を取り込んだときだけ復元されます。</p>
+      </details>
+      <div class="btn-row view-presets" id="view-presets"></div>
+      <div class="btn-row display-toggles">
+        <label class="check-row"><input type="checkbox" id="chk-show-upper" checked> 上顎</label>
+        <label class="check-row"><input type="checkbox" id="chk-show-lower" checked> 下顎</label>
+        <label class="check-row"><input type="checkbox" id="chk-show-gingiva" checked> 歯肉</label>
+        <label class="check-row"><input type="checkbox" id="chk-show-ghost"> 現在の歯列を重ねる</label>
+      </div>
+      <p class="hint">ドラッグで回転／ピンチ・ホイールで拡大縮小／2本指で平行移動／ダブルタップで初期倍率に戻ります。</p>
+    </div>
+
+    <div id="tab-numbers" class="tab-body" hidden>
+      <div id="report-sections"></div>
+      <h3>歯ごとの計測値</h3>
+      <div class="table-scroll"><div id="tooth-table"></div></div>
+    </div>
+
+    <div id="tab-compare" class="tab-body" hidden>
+      <div class="btn-row">
+        <label class="field">
+          <span>比較に使う視点</span>
+          <select id="sel-compare-view"></select>
+        </label>
+        <button id="btn-render-compare" class="btn btn-sm">比較画像を作り直す</button>
+      </div>
+      <canvas id="compare-canvas" class="result-canvas"></canvas>
+      <div class="btn-row">
+        <button id="btn-export-png" class="btn btn-primary">比較画像を保存（PNG）</button>
+      </div>
+      <div id="frontal-ref" hidden>
+        <h3>参考: 正面観（撮影時）</h3>
+        <canvas id="frontal-canvas" class="result-canvas"></canvas>
+      </div>
+    </div>
+
+    <div id="tab-overlay" class="tab-body" hidden>
+      <p class="hint">
+        正面の口腔内写真に、シミュレーション後の歯列を重ねて表示します。
+        STEP3 でフィッティング済みの場合は写真の見え方に自動で合いますが、
+        必要ならスライダーで微調整できます。
+      </p>
+      <div class="overlay-wrap">
+        <canvas id="overlay-canvas" class="result-canvas"></canvas>
+      </div>
+      <div id="overlay-params" class="param-panel"></div>
+      <p id="overlay-status" class="status" hidden></p>
+    </div>
+
+    <div id="tab-export" class="tab-body" hidden>
+      <h3>STL（3Dデータ）</h3>
+      <p class="hint">
+        口腔内スキャナと同じ形式のバイナリ STL（単位 mm・歯冠と歯肉のサーフェス）です。
+        セットアップ模型の3Dプリント、CAD/CAM、他の矯正用ソフトへの取り込みに利用できます。
+      </p>
+      <div class="btn-row" id="stl-buttons"></div>
+      <h3>計測値</h3>
+      <div class="btn-row">
+        <button id="btn-export-csv" class="btn">歯ごとの計測値を CSV で保存</button>
+        <button id="btn-export-json" class="btn">診断値を JSON で保存</button>
+      </div>
+      <h3>顔貌シミュレーションとの連携</h3>
+      <p class="hint">
+        算出した前歯の移動量・手術移動量を症例データに書き出します。
+        顔貌シミュレーションアプリで同じ症例IDを開くと、口元の変化の予測に反映できます。
+      </p>
+      <div class="btn-row">
+        <label class="field">
+          <span>症例ID</span>
+          <input type="text" id="in-case-id" placeholder="例: 2026-0417-TK">
+        </label>
+        <button id="btn-publish-link" class="btn btn-primary">症例に保存して連携する</button>
+      </div>
+      <p id="export-status" class="status" hidden></p>
+    </div>
+
+    <div class="morph-control">
+      <div class="ab-buttons">
+        <button id="btn-before" class="btn btn-sm">現在</button>
+        <button id="btn-play" class="btn btn-sm btn-primary" title="抜歯した歯が歯肉に沈み、歯が並んでいく流れを再生します">▶ 再生</button>
+        <button id="btn-after" class="btn btn-sm is-active">治療後</button>
+      </div>
+      <label>排列の進行度 <span id="morph-value">100%</span></label>
+      <input type="range" id="morph-slider" min="0" max="100" value="100">
+    </div>
+  </section>
+</main>
+
+<!-- 設定ダイアログ -->
+<dialog id="settings-dialog">
+  <h2>標準歯冠幅径の設定</h2>
+  <p class="hint">
+    歯の自動分割と各種推定に用いる標準値です。当院の集計値がある場合は書き換えてください。
+    設定は端末内（localStorage）に保存されます。
+  </p>
+  <div class="table-scroll"><div id="norm-table"></div></div>
+  <h3>CSV から取り込む</h3>
+  <p class="hint">CSV 形式: <code>歯式,近遠心幅径mm</code>（例: <code>上1,8.6</code> / <code>下6,11.1</code>）。1行目はヘッダ。</p>
+  <div class="btn-row">
+    <button id="btn-norm-csv" class="btn btn-sm">CSVを読み込む</button>
+    <input type="file" id="norm-csv-input" accept=".csv,text/csv" hidden>
+    <a class="btn btn-ghost btn-sm" href="data/tooth-norms.csv" download>CSVテンプレート</a>
+  </div>
+  <div id="norm-csv-result" hidden></div>
+  <div class="btn-row dialog-actions">
+    <button id="btn-norm-reset" class="btn btn-ghost">初期値に戻す</button>
+    <button id="btn-norm-save" class="btn btn-primary">保存して閉じる</button>
+  </div>
+</dialog>
+
+<!-- 症例ダイアログ -->
+<dialog id="cases-dialog">
+  <h2>症例の保存・読み込み</h2>
+  <p class="hint">
+    症例は端末内（IndexedDB）にのみ保存され、外部サーバーへは送信されません。
+    共用端末では使用後に削除してください。
+  </p>
+  <div class="btn-row">
+    <label class="field">
+      <span>症例ID</span>
+      <input type="text" id="in-case-id-dialog" placeholder="例: 2026-0417-TK">
+    </label>
+    <button id="btn-case-save" class="btn btn-primary btn-sm">現在の内容を保存</button>
+  </div>
+    <p id="case-save-status" class="status" role="status" hidden></p>
+    <div id="case-list"></div>
+  <div class="btn-row dialog-actions">
+    <button id="btn-case-close" class="btn">閉じる</button>
+  </div>
+</dialog>
+
+<footer class="app-footer">
+  <p>
+    本アプリは治療方針の説明を補助するための<strong>参考シミュレーション</strong>です。
+    咬合面写真から歯列弓と幅径を実測し、正面観・側方観への当てはめで高さ方向と
+    上下顎の前後的な関係を推定していますが、咬頭形態は標準値に基づく近似であり、
+    口腔内スキャナや石膏模型の計測を置き換えるものではありません。
+    実際の治療結果を保証するものでもありません。
+    写真・症例データはすべて端末内で処理され、外部サーバーには送信されません。
+  </p>
+</footer>
+
+<div id="loading-overlay" class="is-hidden">
+  <div class="spinner"></div>
+  <p id="loading-text">読み込んでいます…</p>
+</div>
+
+<script type="module" src="js/app.js"></script>
+<script type="module" src="js/install.js"></script>
+</body>
+</html>

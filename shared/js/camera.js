@@ -8,11 +8,11 @@
  *    iframe に埋め込まれている場合は許可されないことがある。
  *
  * 2. 端末標準のカメラアプリ（input[capture]）
- *    1 が使えない環境でも必ず動く。ピント・露出・前後切替は
- *    端末のカメラアプリ側で行う。
+ *    対応する端末では標準カメラが開く（ブラウザにより写真選択になる）。
+ *    ピント・露出・前後切替は端末のカメラアプリ側で行う。
  *
- * 呼び出し側は startCapture() を使えばよく、1 が使えなければ
- * 自動的に 2 に切り替わる。
+ * 2 はクリック操作の中で直接呼ぶ。1 の許可待ちの後に呼ぶと
+ * ユーザー操作として認識されず、ブラウザにブロックされることがある。
  */
 
 import { toCanvas, loadImageFile } from './imaging.js';
@@ -26,6 +26,7 @@ export class CameraCapture {
     this.video = videoEl;
     this.facing = opts.facing ?? 'environment';
     this.stream = null;
+    this.generation = 0;
   }
 
   get isActive() { return this.stream !== null; }
@@ -33,12 +34,13 @@ export class CameraCapture {
   /** カメラを起動する。失敗時は例外を投げる。 */
   async start() {
     this.stop();
+    const generation = this.generation;
     if (!streamSupported()) {
       const err = new Error('この環境ではアプリ内カメラを利用できません。');
       err.name = 'NotSupportedError';
       throw err;
     }
-    this.stream = await navigator.mediaDevices.getUserMedia({
+    const stream = await navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: this.facing,
         width: { ideal: 1920 },
@@ -46,10 +48,22 @@ export class CameraCapture {
       },
       audio: false,
     });
-    this.video.srcObject = this.stream;
+    if (generation !== this.generation) {
+      stream.getTracks().forEach((t) => t.stop());
+      return false;
+    }
+    this.stream = stream;
+    this.video.srcObject = stream;
     // インカメラはプレビューが鏡像のほうが自然なので、表示だけ左右反転する
     this.video.style.transform = this.facing === 'user' ? 'scaleX(-1)' : '';
-    await this.video.play().catch(() => { /* 自動再生の制限は無視 */ });
+    try {
+      await this.video.play();
+    } catch (err) {
+      if (generation !== this.generation) return false;
+      this.stop();
+      throw err;
+    }
+    return generation === this.generation;
   }
 
   /** 前後カメラを切り替えて再起動する */
@@ -80,6 +94,7 @@ export class CameraCapture {
   }
 
   stop() {
+    this.generation++;
     if (this.stream) {
       this.stream.getTracks().forEach((t) => t.stop());
       this.stream = null;
@@ -97,10 +112,22 @@ export function streamSupported() {
 /** 旧名（互換のため残す） */
 export const cameraAvailable = streamSupported;
 
+/** iPad のデスクトップ表示も含め、タッチ端末では標準カメラを優先する。 */
+export function preferDeviceCamera() {
+  const nav = globalThis.navigator;
+  return /Android|iPhone|iPad|iPod/i.test(nav?.userAgent ?? '')
+    || (/Mac/i.test(nav?.platform ?? '') && nav?.maxTouchPoints > 1);
+}
+
+const pendingCaptures = new WeakMap();
+export function cancelDeviceCamera(input) {
+  if (input) pendingCaptures.get(input)?.();
+}
+
 /**
  * 端末標準のカメラアプリで1枚撮る。
- * input[type=file][capture] を使うので、iframe の中でも、
- * getUserMedia が許可されない環境でも動く。
+ * 撮影専用の input を使い、ユーザーのクリックから同期的に呼ぶ。
+ * capture は端末へのヒント。カメラの対応は端末・ブラウザによる。
  *
  * @param {HTMLInputElement} input 撮影に使う file input（再利用する）
  * @param {'user'|'environment'} facing 最初に開くカメラ（端末側で切替可）
@@ -108,18 +135,24 @@ export const cameraAvailable = streamSupported;
  * @returns {Promise<{canvas, facing, mirrorCertain}|null>} キャンセル時は null
  */
 export function captureWithDeviceCamera(input, facing = 'user', maxSize = 1600) {
-  return new Promise((resolve) => {
+  cancelDeviceCamera(input);
+  return new Promise((resolve, reject) => {
     input.setAttribute('capture', facing);
     input.value = '';
 
     let settled = false;
-    const finish = (value) => {
+    const finish = (value, error) => {
       if (settled) return;
       settled = true;
       input.removeAttribute('capture');
       input.removeEventListener('change', onChange);
-      resolve(value);
+      input.removeEventListener('cancel', onCancel);
+      pendingCaptures.delete(input);
+      input.value = '';
+      if (error) reject(error);
+      else resolve(value);
     };
+    const onCancel = () => finish(null);
 
     const onChange = async () => {
       const file = input.files?.[0];
@@ -132,20 +165,15 @@ export function captureWithDeviceCamera(input, facing = 'user', maxSize = 1600) 
           // 端末のカメラアプリが鏡像で保存するかは機種・設定によるため確定しない
           mirrorCertain: false,
         });
-      } catch {
-        finish(null);
+      } catch (err) {
+        finish(null, err);
       }
     };
 
     input.addEventListener('change', onChange);
-    // 撮影せずに戻った場合に備え、画面復帰から少し待って未選択なら解除する
-    const onFocus = () => {
-      setTimeout(() => {
-        if (!settled && !input.files?.length) finish(null);
-        globalThis.removeEventListener('focus', onFocus);
-      }, 1500);
-    };
-    globalThis.addEventListener('focus', onFocus);
-    input.click();
+    input.addEventListener('cancel', onCancel);
+    pendingCaptures.set(input, onCancel);
+    // focus は写真が届く前にも発火するため、キャンセル判定には使わない。
+    try { input.click(); } catch (err) { finish(null, err); }
   });
 }

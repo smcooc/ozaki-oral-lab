@@ -9,7 +9,7 @@
  */
 
 import { loadImageFile, toCanvas, getImageData, downloadCanvas, downloadBlob } from '../../shared/js/imaging.js';
-import { CameraCapture, streamSupported, captureWithDeviceCamera } from '../../shared/js/camera.js';
+import { CameraCapture, streamSupported, preferDeviceCamera, captureWithDeviceCamera, cancelDeviceCamera } from '../../shared/js/camera.js';
 import {
   $, makeSlider, setStatus, setEnabled, bindTabs, nextFrame, makeYielder,
 } from '../../shared/js/ui.js';
@@ -189,6 +189,7 @@ let adjustUI = null;  // 歯ごとの手直しの操作盤（tooth-adjust.js）
 let photoSession = 0; // 症例・撮影モード切替前の読み込み結果を破棄する
 let camera = null;
 let cameraTargetSlot = null;
+let cameraRequest = 0;
 let norms = loadNorms();
 
 // ---------------------------------------------------------------------------
@@ -548,7 +549,11 @@ function drawThumb(canvas, src) {
 function bindCamera() {
   camera = new CameraCapture($('camera-video'), { facing: 'environment' });
   $('btn-cancel-cam').addEventListener('click', stopCamera);
-  $('btn-switch-cam').addEventListener('click', () => camera.toggleFacing());
+  $('btn-switch-cam').addEventListener('click', async () => {
+    const request = cameraRequest;
+    try { await camera.toggleFacing(); }
+    catch { if (request === cameraRequest) cameraFallback(); }
+  });
   $('btn-shutter').addEventListener('click', async () => {
     const shot = camera.grab(1600);
     if (!shot || !cameraTargetSlot) return;
@@ -559,41 +564,57 @@ function bindCamera() {
 }
 
 /**
- * 撮影する。まずアプリ内カメラ（プレビュー付き）を試し、
- * 使えない環境では端末標準のカメラアプリに切り替える。
- * iframe に埋め込まれている場合など、アプリ内カメラが許可されないことがある。
+ * スマートフォン・iPad はタップ直後に標準カメラを呼び出す。
+ * PC のプレビュー失敗後は、次のタップで標準の撮影・選択画面を開く。
  */
 async function startCamera(slot) {
-  const session = photoSession;
+  stopCamera();
+  const request = cameraRequest;
   cameraTargetSlot = slot;
   $('camera-target').textContent = slot.title;
 
   // 一度アプリ内カメラが使えなかった環境では、以後は端末カメラを直接開く
   // （許可ダイアログが一瞬出るのを避けるため）
-  if (streamSupported() && !state.useSystemCamera) {
+  if (!preferDeviceCamera() && streamSupported() && !state.useSystemCamera) {
     $('camera-area').hidden = false;
+    $('camera-area').scrollIntoView({ block: 'center', behavior: 'smooth' });
     try {
       await camera.start();
-      if (session !== photoSession) stopCamera();
       return;
     } catch (err) {
-      if (session !== photoSession) return;
+      if (request !== cameraRequest) return;
       console.warn('アプリ内カメラを起動できませんでした:', err);
-      state.useSystemCamera = true;
-      $('camera-area').hidden = true;
+      cameraFallback();
+      return; // 許可待ちで失われたユーザー操作を、次のタップで受け直す。
     }
   }
-  await captureWithSystemCamera(slot);
+  await captureWithSystemCamera(slot, request);
 }
 
-/** 端末標準のカメラアプリで撮る（どの環境でも動く経路） */
-async function captureWithSystemCamera(slot) {
+function cameraFallback() {
+  state.useSystemCamera = true;
+  stopCamera();
+  setStatus($('photo-status'), 'warn',
+    'カメラのプレビューを開けませんでした。もう一度「撮影」を押すと端末の撮影・選択画面が開きます。「選択」から撮影済みの写真も使えます。');
+  $('photo-status').scrollIntoView({ block: 'center', behavior: 'smooth' });
+}
+
+/** この関数の最初の await より前に専用 input をクリックする。 */
+async function captureWithSystemCamera(slot, request) {
   const session = photoSession;
   setStatus($('photo-status'), 'busy',
     `${slot.title}を端末のカメラアプリで撮影します…（カメラアプリ内で前後を切り替えられます）`);
-  const input = $(`slot-${slot.id}`).querySelector('input[type="file"]');
-  const shot = await captureWithDeviceCamera(input, 'user', 1600);
-  if (session !== photoSession) return;
+  let shot;
+  try {
+    shot = await captureWithDeviceCamera($('device-camera-input'),
+      state.captureMode === 'phone' ? 'user' : 'environment', 1600);
+  } catch {
+    if (session !== photoSession || request !== cameraRequest) return;
+    cameraTargetSlot = null;
+    setStatus($('photo-status'), 'warn', '撮影した写真を読み込めませんでした。もう一度「撮影」するか、「選択」から写真を指定してください。');
+    return;
+  }
+  if (session !== photoSession || request !== cameraRequest) return;
   cameraTargetSlot = null;
   if (!shot) {
     setStatus($('photo-status'), 'warn', '撮影をキャンセルしました。');
@@ -611,6 +632,8 @@ async function acceptShot(slotId, shot) {
 }
 
 function stopCamera() {
+  cameraRequest++;
+  cancelDeviceCamera($('device-camera-input'));
   camera?.stop();
   $('camera-area').hidden = true;
   cameraTargetSlot = null;

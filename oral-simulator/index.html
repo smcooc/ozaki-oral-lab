@@ -78,6 +78,20 @@
   <!-- STEP 1: 写真取り込み -->
   <section class="card" id="step-photo">
     <h2><span class="step-no">1</span>写真を取り込む</h2>
+    <div id="capture-guide" class="capture-guide" aria-label="撮影の進み具合と次の操作">
+      <p id="capture-progress" role="status" aria-live="polite"></p>
+      <p id="capture-next" class="hint"></p>
+      <div class="btn-row">
+        <button type="button" id="guide-camera" class="btn btn-primary">次の写真を撮影</button>
+        <button type="button" id="guide-file" class="btn">写真を選ぶ</button>
+      </div>
+      <div class="btn-row">
+        <button type="button" id="guide-detect" class="btn" hidden>歯の区切りを確認</button>
+        <button type="button" id="guide-fit" class="btn" disabled>写真に合わせる操作へ</button>
+        <button type="button" id="guide-3d" class="btn" disabled>3Dを見る</button>
+      </div>
+      <p id="capture-model-note" class="hint"></p>
+    </div>
     <p class="hint" id="photo-hint"></p>
     <div class="photo-slots" id="photo-slots"></div>
 

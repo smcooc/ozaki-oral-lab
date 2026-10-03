@@ -220,6 +220,7 @@ async function main() {
   bindSettingsDialog();
   bindCasesDialog();
   bindCamera();
+  bindCaptureGuide();
   if (state.caseId) {
     $('in-case-id').value = state.caseId;
     $('in-case-id-dialog').value = state.caseId;
@@ -267,7 +268,9 @@ async function main() {
 // ---------------------------------------------------------------------------
 function bindCaptureMode() {
   document.querySelectorAll('[data-capture]').forEach((card) => {
-    card.addEventListener('click', () => applyCaptureMode(card.dataset.capture));
+    card.addEventListener('click', () => {
+      if (card.dataset.capture !== state.captureMode) applyCaptureMode(card.dataset.capture);
+    });
   });
 }
 
@@ -349,6 +352,7 @@ function buildPhotoSlots() {
       <span class="slot-title">${slot.title}<span class="slot-required${slot.required ? '' : ' is-optional'}">${slot.required ? '必須' : '任意'}</span></span>
       <canvas class="slot-thumb" id="thumb-${slot.id}"></canvas>
       <span class="slot-note">${slot.note}</span>
+      <span class="slot-state" role="status">未取り込み</span>
       <div class="slot-actions">
         <button class="btn" data-act="camera">📷 撮影</button>
         <button class="btn" data-act="file">🖼 選択</button>
@@ -364,12 +368,18 @@ function buildPhotoSlots() {
       e.target.value = '';
       if (!file) return;
       const session = photoSession;
-      const img = await loadImageFile(file);
-      if (session !== photoSession) return;
-      state.sources[slot.id] = img;
-      state.transforms[slot.id] = { rotate: 0, flip: false };
-      state.mirrorCertain[slot.id] = false;
-      await applyPhoto(slot.id);
+      try {
+        const img = await loadImageFile(file);
+        if (session !== photoSession) return;
+        state.sources[slot.id] = img;
+        state.transforms[slot.id] = { rotate: 0, flip: false };
+        state.mirrorCertain[slot.id] = false;
+        await applyPhoto(slot.id);
+      } catch {
+        if (session !== photoSession) return;
+        el.querySelector('.slot-state').textContent = '読み込めませんでした。別の写真を選んでください。';
+        setStatus($('photo-status'), 'warn', `${slot.title}の写真を読み込めませんでした。別の写真を選ぶか、撮影し直してください。`);
+      }
     });
 
     el.querySelector('[data-act="file"]').addEventListener('click', () => fileInput.click());
@@ -385,6 +395,71 @@ function buildPhotoSlots() {
       await applyPhoto(slot.id);
     });
 
+  }
+}
+
+function nextPhotoSlot() {
+  return PHOTO_SLOTS.find(s => s.required && !state.photos[s.id])
+    ?? PHOTO_SLOTS.find(s => !state.photos[s.id]);
+}
+
+function jumpToStep(id) {
+  const target = $(id);
+  target.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  const heading = target.querySelector('h2') ?? target;
+  heading.tabIndex = -1;
+  heading.focus({ preventScroll: true });
+}
+
+function bindCaptureGuide() {
+  $('guide-camera').addEventListener('click', () => {
+    const slot = nextPhotoSlot();
+    if (slot && !state.fitting) startCamera(slot); // タップから同期的に標準カメラを開く
+  });
+  $('guide-file').addEventListener('click', () => {
+    const slot = nextPhotoSlot();
+    if (slot && !state.fitting) $(`slot-${slot.id}`).querySelector('input[type=file]').click();
+  });
+  $('guide-detect').addEventListener('click', () => jumpToStep('step-detect'));
+  $('guide-fit').addEventListener('click', () => jumpToStep('step-fit'));
+  $('guide-3d').addEventListener('click', () => {
+    document.querySelector('.tab[data-tab="tab-3d"]').click();
+    jumpToStep('step-result');
+  });
+}
+
+/** 枚数は取り込み状況。写真の品質や歯並びの再現精度を保証する表示ではない。 */
+function refreshCaptureGuide() {
+  const loaded = PHOTO_SLOTS.filter(s => state.photos[s.id]);
+  const required = PHOTO_SLOTS.filter(s => s.required);
+  const next = nextPhotoSlot();
+  const hasModel = !!(state.models.upper || state.models.lower);
+  const hasView = FIT_SLOTS.some(s => state.photos[s.id]);
+  $('capture-progress').textContent = `写真 ${loaded.length} / ${PHOTO_SLOTS.length}枚を取り込み済み（必須 ${required.filter(s => state.photos[s.id]).length} / ${required.length}枚）`;
+  $('capture-next').textContent = state.fitting ? '写真に合わせています。終わるまでお待ちください。'
+    : next ? `おすすめ：次は「${next.title}」。${next.note}`
+      : '写真がそろいました。向きと写りを確認してから、写真に合わせる操作へ進んでください。';
+  $('guide-camera').textContent = next ? `${next.title}を撮影` : '写真の取り込み完了';
+  $('guide-file').textContent = next ? `${next.title}を選ぶ` : '写真を選ぶ';
+  for (const id of ['guide-camera', 'guide-file']) {
+    $(id).hidden = !next;
+    $(id).disabled = state.fitting;
+  }
+  $('guide-detect').hidden = state.captureMode === 'phone';
+  $('guide-detect').disabled = !state.imageData.upper && !state.imageData.lower || state.fitting;
+  $('guide-fit').disabled = !hasModel || !hasView || state.fitting;
+  $('guide-3d').disabled = !hasModel || state.fitting;
+  $('capture-model-note').textContent = !hasModel ? '写真を取り込んでモデルができると、3Dを開けます。'
+    : state.captureMode === 'phone' ? '3Dは標準の歯列を土台にした目安です。写真の枚数だけで再現精度は決まりません。'
+      : !state.models.upper || !state.models.lower ? '現在の3Dは片顎のみです。上下の写真をそろえ、歯の区切りも確認してください。'
+        : !state.fit ? '3Dを表示できます。歯の区切りを確認し、正面・側方の写真に合わせてください。'
+          : '写真への当てはめ後も、3Dの歯並びと咬み合わせを写真と見比べてください。';
+  for (const slot of PHOTO_SLOTS) {
+    const el = $(`slot-${slot.id}`);
+    const filled = !!state.photos[slot.id];
+    el.querySelector('.slot-state').textContent = filled ? '取り込み済み・向きと写りを確認してください' : '未取り込み';
+    el.querySelector('[data-act=camera]').textContent = filled ? '📷 撮り直す' : '📷 撮影';
+    el.querySelector('[data-act=file]').textContent = filled ? '🖼 選び直す' : '🖼 選択';
   }
 }
 
@@ -439,6 +514,7 @@ async function applyPhoto(slotId) {
   slotEl.classList.add('is-filled');
   slotEl.querySelectorAll('[data-act="rotate"],[data-act="flip"]').forEach((b) => { b.hidden = false; });
   drawThumb($(`thumb-${slotId}`), canvas);
+  refreshCaptureGuide();
 
   if (slotId !== 'upper' && slotId !== 'lower') {
     // 当てはめ（歯ごとの高さ・開咬）はこの写真から求めたものなので、写真を替えたら捨てる
@@ -534,6 +610,7 @@ async function applyPhoto(slotId) {
   refreshEditor();
   setEnabled($('step-detect'), true);
   maybeRunSimulation();
+  refreshCaptureGuide();
 }
 
 function drawThumb(canvas, src) {
@@ -1148,6 +1225,7 @@ function maybeRunSimulation(rebuild = false) {
       canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
     }
     setEnabled($('step-result'), false);
+    refreshCaptureGuide();
     adjustUI?.refresh();
     return;
   }
@@ -1995,6 +2073,7 @@ function updateFitAvailability() {
   const hasModel = !!(state.models.upper || state.models.lower);
   const hasView = FIT_SLOTS.some((slot) => state.photos[slot.id]);
   setEnabled($('step-fit'), hasModel && hasView);
+  refreshCaptureGuide();
   if (!hasView) {
     $('fit-quality').textContent = state.captureMode === 'phone'
       ? '正面の写真を取り込むと実行できます。'
@@ -2030,6 +2109,7 @@ async function runFitting() {
   }
 
   state.fitting = true;
+  refreshCaptureGuide();
   $('btn-fit').disabled = true;
   setStatus($('fit-status'), 'busy', `${views.length}枚の写真に合わせています…`);
   await nextFrame();
@@ -2151,6 +2231,7 @@ async function runFitting() {
   } finally {
     state.fitting = false;
     $('btn-fit').disabled = false;
+    refreshCaptureGuide();
   }
 }
 

@@ -1,5 +1,5 @@
 // 配信物だけを保存する。写真・症例・任意URLはキャッシュへ入れない。
-const VERSION = '6255ef09b33eabba'; // 配信パッケージでは全静的ファイルのハッシュへ置換
+const VERSION = 'a41a99ce911cac15'; // 配信パッケージでは全静的ファイルのハッシュへ置換
 const PREFIX = `ozaki-oral:${new URL(self.registration.scope).pathname}:`;
 const CACHE = PREFIX + VERSION;
 const FILES = [

@@ -1,6 +1,7 @@
 // 写真・症例には触れず、インストールとアプリ本体の更新だけを扱う。
 const button = document.getElementById('install-app');
 const help = document.getElementById('install-help');
+const localInstall = document.documentElement.dataset.localInstall === 'true';
 let prompt;
 const standalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 if (standalone()) help.hidden = true;
@@ -32,7 +33,9 @@ updateStatus.id = 'update-check-status';
 updateStatus.className = 'hint';
 updateStatus.setAttribute('role', 'status');
 updateStatus.setAttribute('aria-live', 'polite');
-updateStatus.textContent = '修正版があるか確認できます。確認だけでは写真は消えません。';
+updateStatus.textContent = localInstall
+  ? 'このPCに置いたアプリの更新を確認します。配布版の入れ替え方法は「院内PCで使う」をご覧ください。'
+  : '修正版があるか確認できます。確認だけでは写真は消えません。';
 checkButton.setAttribute('aria-describedby', updateStatus.id);
 updatePanel.append(checkButton, updateStatus);
 help.after(updatePanel);
@@ -92,7 +95,7 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
   });
   checkButton.addEventListener('click', async () => {
     if (checkButton.disabled) return;
-    if (navigator.onLine === false) {
+    if (!localInstall && navigator.onLine === false) {
       updateStatus.textContent = 'オフラインです。インターネットにつないでから、もう一度「更新を確認」を押してください。';
       return;
     }
@@ -105,7 +108,9 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
       if (showAvailable(reg)) return;
       await reg.update();
       if (reg.installing) await waitForInstall(reg.installing);
-      if (!showAvailable(reg)) updateStatus.textContent = '現在公開されている最新版です。そのままお使いください。';
+      if (!showAvailable(reg)) updateStatus.textContent = localInstall
+        ? 'このPC内のアプリを確認しました。新しいWindows版の入手・入れ替え方法は「院内PCで使う」をご覧ください。'
+        : '現在公開されている最新版です。そのままお使いください。';
     } catch {
       updateStatus.textContent = '更新を確認できませんでした。通信状態を確認して、もう一度押してください。写真はそのまま残っています。';
     } finally {

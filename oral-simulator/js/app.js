@@ -14,6 +14,7 @@ import {
   $, makeSlider, setStatus, setEnabled, bindTabs, nextFrame, makeYielder,
 } from '../../shared/js/ui.js';
 import { listCases, getCase, saveCaseModule, deleteCase } from '../../shared/js/case-store.js';
+import { CASE_FILE_LIMIT, encodeCaseTransfer, decodeCaseTransfer, caseTransferFilename } from './case-transfer.js';
 import { STANDARD_TEETH, TOOTH_NAMES, toothLabel, fdi } from './tooth-library.js';
 import { ARCH_TEMPLATES } from './arch.js';
 import {
@@ -1824,41 +1825,115 @@ function importNormCsv(text) {
 // ---------------------------------------------------------------------------
 // 症例の保存・読み込み
 // ---------------------------------------------------------------------------
+let caseOperation = 0; // 後から選んだ症例操作を、古いDB/ファイル読込の完了で巻き戻さない。
+
 function bindCasesDialog() {
   const dialog = $('cases-dialog');
   $('btn-cases').addEventListener('click', async () => {
     $('case-save-status').hidden = true;
+    $('case-new-options').hidden = true;
     $('in-case-id-dialog').value = state.caseId;
     await renderCaseList();
     dialog.showModal();
   });
   $('btn-case-close').addEventListener('click', () => dialog.close());
-  $('btn-case-save').addEventListener('click', async () => {
-    const id = $('in-case-id-dialog').value.trim();
-    if (!id) return;
-    state.caseId = id;
-    $('in-case-id').value = id;
+  $('btn-case-save').addEventListener('click', () => saveCurrentCase());
+  $('btn-case-export').addEventListener('click', async () => {
+    if (!caseOperationReady()) return;
     try {
-      const data = serializeCase();
-      await saveCaseModule(id, 'oral', data, { name: id, link: state.setup?.link ?? {} });
-      const count = ['upper', 'lower'].filter((a) => data.corrections[a]).length;
-      const nAdj = countAdjusted(data.toothAdjust);
-      // 写真の照合を通して保存できた手直しの歯数（照合できない接続では 0 になる）
-      const nAdjSaved = ['upper', 'lower']
-        .reduce((n, a) => n + Object.keys(data.corrections[a]?.toothAdjust ?? {}).length, 0)
-        + countAdjusted(data.corrections.frontal?.toothAdjust);
-      const unavailable = ['upper', 'lower'].some(a => state.detections[a] && !state.fingerprints[a])
-        || (nAdj > 0 && nAdjSaved < nAdj);
-      const adjNote = nAdjSaved ? `歯の位置の手直し（${nAdjSaved}歯）も記録しました。` : '';
-      setStatus($('case-save-status'), unavailable ? 'warn' : 'ok', unavailable
-        ? '治療方針を保存しました。この接続では写真の照合ができないため、境界・歯の位置の手直しの保存・復元にはHTTPSまたはlocalhostで開いてください。'
-        : `症例を保存しました。${count ? `${count}顎分の境界も記録しました。` : ''}${adjNote}`
-          + `${count || adjNote ? '同じ写真を選ぶと復元できます。' : ''}写真は保存していません。`);
-      await renderCaseList();
-    } catch (err) {
-      setStatus($('case-save-status'), 'err', `保存できませんでした: ${err.message}`);
+      const id = $('in-case-id-dialog').value.trim();
+      const text = encodeCaseTransfer(id, serializeCase());
+      const result = await downloadBlob(new Blob([text], { type: 'application/json' }), caseTransferFilename(id));
+      setStatus($('case-save-status'), result.ok ? 'ok' : 'warn', result.ok
+        ? '症例ファイルを書き出しました。写真は含みません。別の端末ではこのファイルを読み込み、同じ元写真を選んでください。'
+        : '症例ファイルは保存されていません。保存をキャンセルした場合は、必要なときにもう一度お試しください。');
+    } catch (err) { setStatus($('case-save-status'), 'err', err.message); }
+  });
+  $('btn-case-import').addEventListener('click', () => {
+    if (caseOperationReady()) $('case-import-input').click();
+  });
+  $('case-import-input').addEventListener('change', async e => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !caseOperationReady()) return;
+    const session = photoSession;
+    const operation = ++caseOperation;
+    try {
+      if (file.size > CASE_FILE_LIMIT) throw new Error('症例ファイルは2MB以下にしてください。');
+      const record = decodeCaseTransfer(await file.text());
+      if (session !== photoSession || operation !== caseOperation || !caseOperationReady()) return;
+      if (!confirm(`症例「${record.caseId}」を現在の画面へ読み込みます。現在の写真と未保存の変更は置き換わります。必要な内容は先に保存してください。\n\n端末に保存済みの症例は上書きしません。読み込みますか？`)) {
+        setStatus($('case-save-status'), 'warn', '読み込みをキャンセルしました。現在の写真と編集内容はそのままです。');
+        return;
+      }
+      applyCaseData(record.caseId, record.oral, { imported: true });
+    } catch (err) { setStatus($('case-save-status'), 'err', err.message); }
+  });
+  $('btn-case-new').addEventListener('click', () => {
+    if (caseOperationReady()) $('case-new-options').hidden = false;
+  });
+  $('btn-case-new-cancel').addEventListener('click', () => { $('case-new-options').hidden = true; });
+  $('btn-case-new-save').addEventListener('click', async () => {
+    const session = photoSession;
+    const operation = ++caseOperation;
+    if (await saveCurrentCase()) {
+      if (session === photoSession && operation === caseOperation && caseOperationReady()) startNewCase();
     }
   });
+  $('btn-case-new-discard').addEventListener('click', () => {
+    if (caseOperationReady()) startNewCase();
+  });
+}
+
+function caseOperationReady() {
+  if (!state.fitting) return true;
+  setStatus($('case-save-status'), 'warn', '写真への当てはめが終わってから症例を操作してください。');
+  return false;
+}
+
+async function saveCurrentCase() {
+  if (!caseOperationReady()) return false;
+  const session = photoSession;
+  const id = $('in-case-id-dialog').value.trim();
+  if (!id) {
+    setStatus($('case-save-status'), 'warn', '先に症例IDを入力してください（院内の管理IDがおすすめです）。');
+    $('in-case-id-dialog').focus();
+    return false;
+  }
+  try {
+    const data = serializeCase();
+    await saveCaseModule(id, 'oral', data, { name: id, link: state.setup?.link ?? {} });
+    if (session !== photoSession) return false;
+    state.caseId = id;
+    $('in-case-id').value = id;
+    const count = ['upper', 'lower'].filter(a => data.corrections[a]).length;
+    const nAdj = countAdjusted(data.toothAdjust);
+    const nAdjSaved = ['upper', 'lower']
+      .reduce((n, a) => n + Object.keys(data.corrections[a]?.toothAdjust ?? {}).length, 0)
+      + countAdjusted(data.corrections.frontal?.toothAdjust);
+    const unavailable = ['upper', 'lower'].some(a => state.detections[a] && !state.fingerprints[a])
+      || (nAdj > 0 && nAdjSaved < nAdj);
+    const adjNote = nAdjSaved ? `歯の位置の手直し（${nAdjSaved}歯）も記録しました。` : '';
+    setStatus($('case-save-status'), unavailable ? 'warn' : 'ok', unavailable
+      ? '治療方針を保存しました。この接続では写真の照合ができないため、境界・歯の位置の手直しの保存・復元にはHTTPSまたはlocalhostで開いてください。'
+      : `症例を保存しました。${count ? `${count}顎分の境界も記録しました。` : ''}${adjNote}`
+        + `${count || adjNote ? '同じ写真を選ぶと復元できます。' : ''}写真は保存していません。`);
+    await renderCaseList();
+    return session === photoSession;
+  } catch (err) {
+    setStatus($('case-save-status'), 'err', `保存できませんでした: ${err.message}`);
+    return false;
+  }
+}
+
+function startNewCase() {
+  stopPlayback();
+  applyCaseData('', { captureMode: state.captureMode, plan: defaultPlan(),
+    calib: { centralMd: 8.5, centralHeight: 10.5 }, lastTooth: 7, absent: {}, corrections: {} }, { fresh: true });
+  $('in-case-id-dialog').value = '';
+  $('case-new-options').hidden = true;
+  setStatus($('photo-status'), 'ok', '新しい症例を始めました。前の写真と手直しをクリアし、治療方針を初期値に戻しました。今回の患者さんの写真を選んでください。');
+  jumpToStep('step-photo');
 }
 
 async function renderCaseList() {
@@ -1900,27 +1975,40 @@ async function renderCaseList() {
 
 /** 保存済み症例から治療方針と較正値を復元する（写真は端末に保存していない） */
 async function loadCase(id) {
+  const session = photoSession;
+  const operation = ++caseOperation;
   const rec = await getCase(id);
+  if (session !== photoSession || operation !== caseOperation) return;
   if (!rec?.oral) return;
   if (state.fitting) {
     setStatus($('photo-status'), 'warn', '写真への当てはめが終わってから症例を読み込んでください。');
     return;
   }
-  // 別症例の写真・計測・3Dを、新しいIDへ付け替えない。
-  applyCaptureMode(CAPTURE_MODES[rec.oral.captureMode] ? rec.oral.captureMode : 'clinical', { silent: true });
+  applyCaseData(id, rec.oral);
+}
+
+/** 保存済み症例・検証済みファイル・新規開始に共通。写真や3Dは持ち越さない。 */
+function applyCaseData(id, oral, opts = {}) {
+  caseOperation++;
+  stopPlayback();
+  applyCaptureMode(CAPTURE_MODES[oral.captureMode] ? oral.captureMode : 'clinical', { silent: true });
   state.caseId = id;
   $('in-case-id').value = id;
-  state.plan = { ...defaultPlan(), ...rec.oral.plan };
-  state.calib = { ...state.calib, ...rec.oral.calib };
-  state.lastTooth = rec.oral.lastTooth ?? 7;
-  state.absent = { ...(rec.oral.absent ?? {}) };
-  state.savedCorrections = { ...(rec.oral.corrections ?? {}) };
+  $('in-case-id-dialog').value = id;
+  state.plan = { ...defaultPlan(), ...oral.plan };
+  state.calib = { centralMd: 8.5, centralHeight: 10.5, ...oral.calib };
+  state.lastTooth = oral.lastTooth ?? 7;
+  state.absent = { ...(oral.absent ?? {}) };
+  state.savedCorrections = { ...(oral.corrections ?? {}) };
+  state.archForm = 'ovoid';
+  state.overlay = { scale: 1, x: 0, y: 0, opacity: 0.85 };
+  buildOverlayParams();
   // 歯ごとの手直しは写真の照合が通ったときだけ戻す（applyPhoto）。ここでは件数だけ伝える。
   // 手直しの記録がない旧版の保存データは、手直しなしとして読む。
   const pendingAdjust = ['upper', 'lower']
     .reduce((n, a) => n + Object.keys(restoreToothAdjust(state.savedCorrections[a], a)).length, 0)
     + countAdjusted(sanitizeToothAdjust(state.savedCorrections.frontal?.toothAdjust));
-  const unboundAdjust = countAdjusted(sanitizeToothAdjust(rec.oral.toothAdjust)) > pendingAdjust;
+  const unboundAdjust = countAdjusted(sanitizeToothAdjust(oral.toothAdjust)) > pendingAdjust;
   $('in-central-md').value = state.calib.centralMd;
   $('in-central-height').value = state.calib.centralHeight;
   $('sel-last-tooth').value = String(state.lastTooth);
@@ -1933,8 +2021,10 @@ async function loadCase(id) {
   $('sel-arch-form').value = state.plan.archForm;
   $('cases-dialog').close();
   savePlan();
+  if (opts.fresh) return;
   setStatus($('photo-status'), 'ok',
-    `症例「${id}」の治療方針を読み込みました。写真は保存されないため、必要に応じて取り込み直してください。`
+    `症例「${id}」の治療方針を読み込みました。保存時と同じ元写真を取り込んでください。`
+    + (opts.imported ? 'ファイルを現在の画面に開いた状態です。この端末にも残す場合は「症例」から保存してください。' : '')
     + (pendingAdjust ? `歯の位置の手直し（${pendingAdjust}歯）は、保存時と同じ写真を取り込むと復元されます。` : '')
     + (unboundAdjust ? '一部の手直しは写真と照合できない状態で保存されたため、復元できません。' : ''));
 }

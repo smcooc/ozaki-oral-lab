@@ -61,7 +61,7 @@ function tx(mode, fn) {
       reject(err);
       return;
     }
-    t.oncomplete = () => resolve(result && result.result !== undefined ? result.result : result);
+    t.oncomplete = () => resolve(result && typeof result === 'object' && 'result' in result ? result.result : result);
     t.onerror = () => reject(t.error);
     t.onabort = () => reject(t.error);
   }));

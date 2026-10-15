@@ -31,6 +31,7 @@
 </header>
 
 <main>
+  <p class="hint"><a href="local-setup.html" target="_blank" rel="noopener">院内PCで使う・Lenovoへの設置手順</a></p>
   <details class="install-panel" id="install-help">
     <summary>ホーム画面に追加して、アプリとして使う</summary>
     <p>iPhone・iPad：Safariで開き、共有メニュー →「ホーム画面に追加」→「追加」。「Webアプリとして開く」がある場合はオンにします。</p>
@@ -394,16 +395,32 @@
   <h2>症例の保存・読み込み</h2>
   <p class="hint">
     症例は端末内（IndexedDB）にのみ保存され、外部サーバーへは送信されません。
-    共用端末では使用後に削除してください。
+    別のPC・ブラウザへは自動で移りません。移すときは下の「症例ファイルを書き出す」を使います。
+    写真は保存しません。再開するときは症例を先に読み込み、保存時と同じ元写真を選んでください。
   </p>
   <div class="btn-row">
     <label class="field">
       <span>症例ID</span>
-      <input type="text" id="in-case-id-dialog" placeholder="例: 2026-0417-TK">
+      <input type="text" id="in-case-id-dialog" maxlength="100" placeholder="例: 2026-0417-TK">
     </label>
     <button id="btn-case-save" class="btn btn-primary btn-sm">現在の内容を保存</button>
   </div>
     <p id="case-save-status" class="status" role="status" hidden></p>
+  <div class="btn-row">
+    <button type="button" id="btn-case-export" class="btn">症例ファイルを書き出す</button>
+    <button type="button" id="btn-case-import" class="btn">症例ファイルを読み込む</button>
+    <input id="case-import-input" type="file" accept=".json,application/json" hidden>
+  </div>
+  <p class="hint">写真を含まない専用のJSONファイルです。患者写真は元の院内フォルダに保管してください。ファイルを読み込むだけでは保存済みの症例を上書きしません。</p>
+  <button type="button" id="btn-case-new" class="btn">別の患者さんで新しい症例を始める</button>
+  <div id="case-new-options" hidden>
+    <p class="hint">現在の写真・手直し・治療方針を画面からクリアします。保存済みの症例は残ります。</p>
+    <div class="btn-row">
+      <button type="button" id="btn-case-new-save" class="btn btn-primary">保存して新しい症例へ（おすすめ）</button>
+      <button type="button" id="btn-case-new-discard" class="btn">保存せず新しい症例へ</button>
+      <button type="button" id="btn-case-new-cancel" class="btn btn-ghost">戻る</button>
+    </div>
+  </div>
     <div id="case-list"></div>
   <div class="btn-row dialog-actions">
     <button id="btn-case-close" class="btn">閉じる</button>

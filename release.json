@@ -1,6 +1,6 @@
 {
   "name": "OZAKI Oral Lab | 咬合シミュレーター",
-  "version": "421c9ec1fd10fa40",
+  "version": "6255ef09b33eabba",
   "files": [
     ".nojekyll",
     "index.html",
@@ -14,6 +14,7 @@
     "oral-simulator/js/app.js",
     "oral-simulator/js/arch.js",
     "oral-simulator/js/arrange.js",
+    "oral-simulator/js/case-transfer.js",
     "oral-simulator/js/corrections.js",
     "oral-simulator/js/editor2d.js",
     "oral-simulator/js/fitting.js",
@@ -26,6 +27,7 @@
     "oral-simulator/js/tooth-adjust.js",
     "oral-simulator/js/tooth-library.js",
     "oral-simulator/js/viewer3d.js",
+    "oral-simulator/local-setup.html",
     "oral-simulator/manifest.webmanifest",
     "oral-simulator/sw.js",
     "robots.txt",

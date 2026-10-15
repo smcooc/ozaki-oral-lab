@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ja">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>院内PCで使う | OZAKI Oral Lab | 咬合シミュレーター</title>
+<style>
+body{font-family:system-ui,"Yu Gothic",sans-serif;color:#183743;background:#f2f7f8;line-height:1.8;margin:0;padding:24px 16px}main{max-width:800px;margin:auto}h1{font-size:1.55rem;line-height:1.5}h2{font-size:1.2rem}section{padding:20px;background:white;border:1px solid #d2e0e4;border-radius:14px;margin:20px 0}a{color:#11637b}li{margin:10px 0}.button{display:inline-block;padding:12px 18px;border-radius:9px;background:#155e75;color:white;text-decoration:none;font-weight:bold}code{overflow-wrap:anywhere;background:#f1f5f6;padding:2px 4px}.note{color:#526b75;font-size:.9rem}table{border-collapse:collapse;width:100%}th,td{border:1px solid #d2e0e4;padding:10px;text-align:left;vertical-align:top}@media print{body{background:white;padding:0}.button{color:black;background:white}section{break-inside:avoid}}
+</style>
+<main>
+<h1>OZAKI Oral Lab | 咬合シミュレーター<br>院内PCで使う手順</h1>
+<p>まずは<strong>使用するWindowsのパソコンで、1症例の写真を取り込んで3Dを表示する</strong>ところから始めます。受付サーバーへの自動接続は、医院の写真の保管先を確認してから設定します。</p>
+<section><h2>1．今日すぐ試す（おすすめ）</h2>
+<ol><li>使用するPCでMicrosoft Edgeを開き、下の「アプリを開く」を押します。</li><li>「撮影方法」を選びます。医院にある規格写真なら<strong>5枚法</strong>がおすすめです。</li><li>「写真を選ぶ」で、まず上顎・下顎の写真を指定します。続いて正面・右側・左側を選びます。</li><li>「歯の区切りを確認」→「写真に合わせる操作へ」へ進み、「写真に合わせる」を押します。</li><li>「3Dを見る」で表示を確認します。まだ写真と一致しない部分があるため、院内での試用として写真と見比べてください。</li></ol>
+<a class="button" href="https://smcooc.github.io/ozaki-oral-lab/oral-simulator/">アプリを開く</a>
+<p class="note">この方法でも写真はブラウザ内で処理します。Windows版へ変更すると保存場所が別になるので、保存済み症例は先に症例ファイルへ書き出してください。</p></section>
+<section><h2>2．アプリ本体を使用するPCに置く</h2>
+<p>Windows用一式です。MacBook Pro上でWindowsを使っている場合も、このWindows版を使えます。追加の有料サービス、Node.jsやPythonのインストールは不要です。</p>
+<p><a class="button" href="https://smcooc.github.io/ozaki-oral-lab/downloads/OZAKI-Oral-Lab-Windows.zip">Windows版をダウンロード</a></p>
+<ol><li>使用するPCでダウンロードしたZIPを右クリックし、<strong>「すべて展開」</strong>します。ZIPの中から直接起動しないでください。</li><li>エクスプローラー（黄色いフォルダー）を開き、上部のアドレス欄に <code>%USERPROFILE%</code> と入力してEnterを押します。出てきた自分のユーザーフォルダーへ、展開した <code>OZAKI-Oral-Lab</code> フォルダーを移します。OneDrive等の転送フォルダーは起動時に拒否する場合があるため、アプリ本体は通常のローカルフォルダーに置きます。</li><li>フォルダー内の <code>start.cmd</code>（表示が「start」だけの場合もあります）をダブルクリックします。</li><li>アプリ画面が開いたら使えます。Windowsで実行が禁止されている場合は、表示文を管理担当者または開発担当へ伝えてください。Windowsの保護設定を一括で無効にする必要はありません。</li><li>起動アイコンを作る場合は <code>desktop-shortcut.cmd</code> を1回実行します。次回はデスクトップの「OZAKI Oral Lab」から開きます。</li></ol>
+<p>アプリはこのPCだけの固定アドレス <code>http://127.0.0.1:18765/oral-simulator/</code> で動きます。スマートフォンからこのアドレスを開くことはできません。同じWindowsユーザーで、毎回作成したアイコンから開いてください。Edgeの標準プロファイルを使います。</p>
+<p class="note">起動できない場合に別の番号のアドレスへ勝手に変更しないでください。保存症例の場所が変わります。終了後に裏側の配信処理も止める場合は <code>stop.cmd</code> を実行します。管理者権限や受付サーバーの設定変更は前提にしていません。</p></section>
+<section><h2>3．受付サーバーの写真を使う</h2>
+<ol><li>まず、普段その患者さんの口腔内写真を表示しているソフトを開きます。OD-WorksとWinCephを併用している場合、画像はWinCeph側で管理されていることがあります。</li><li><strong>既に共有フォルダーでJPEG・PNGの元写真が見える場合</strong>は、アプリの「写真を選ぶ」からそのフォルダーを開いて選びます。読み取り権限があれば取り込みに使えます。</li><li><strong>ソフトの中でしか写真を見られない場合</strong>は、担当者に「1症例の上顎・下顎・正面・右・左の写真をJPEGまたはPNGで書き出したい」と伝えてください。書き出し操作はソフトの版で異なるため、存在未確認のメニューは案内していません。</li><li>書き出した写真は、医院で管理する写真フォルダーに、<strong>症例番号／撮影日</strong>でまとめます。アプリ配布フォルダーの中には入れないでください。</li></ol>
+<p>この段階では、OD-Worksの患者一覧・予約・治療記録は自動で取得しません。患者データベースを移動・変更する必要もありません。サーバーの場所、ソフトの版、正式な書き出し方法が分かれば、読み取り連携を次に進めます。</p>
+<p class="note">共有フォルダーの場所が分からない場合は、受付の担当者に「使用するPCから患者の口腔内写真を開くときの場所」を確認してください。パスワードをチャットへ送る必要はありません。</p></section>
+<section><h2>4．保存・再開・別の患者さんへ切り替える</h2>
+<ol><li>新しい患者さんは「症例」から<strong>新しい症例</strong>を選んで始めます。前の患者さんの写真を残したまま番号だけ変えないでください。</li><li>作業後は「症例」で院内の症例番号を入力し、保存します。</li><li>別のPCへ移すときやバックアップ時は、<strong>症例ファイルを書き出す</strong>機能を使います。ファイルには設定・数値・補正が入りますが、写真は入りません。</li><li>再開時は「症例」から保存症例または症例ファイルを先に読み込み、その後に<strong>同じ元写真</strong>を選び直します。</li></ol>
+<p>保存先はPC・ブラウザ・アプリのアドレスごとに別です。受付サーバーへ自動保存・同期はされません。写真の切り抜きや再圧縮をすると保存した補正が一致しないことがあるため、最初に使った元写真を保管してください。</p></section>
+<section><h2>5．Windows版を新しくするとき</h2>
+<ol><li>必要な症例を保存し、症例ファイルにも書き出します。</li><li>旧版フォルダーの <code>stop.cmd</code> を実行します。</li><li>新しいZIPを別のフォルダーへ「すべて展開」し、新しい <code>start.cmd</code> で起動します。必要ならショートカットを作り直します。</li><li>更新通知が出たら、保存を確認して更新します。写真は選び直してください。</li></ol>
+<p class="note">同じWindowsユーザー・同じブラウザ・同じ固定アドレスであればブラウザの保存領域は引き続き使えます。フォルダーのコピーだけでは別PCへ症例は移りません。</p></section>
+<p class="note">メーカー情報：<a href="https://risecorp.co.jp/product/odworks.html">OD-Works</a> ／ <a href="https://www.risecorp.co.jp/product/winceph.html">WinCeph</a>。院内の実機・共有フォルダー・OD連携は接続先確認後に検証します。</p>
+</main>
+</html>
